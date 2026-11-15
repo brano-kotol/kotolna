@@ -317,6 +317,7 @@ table.raw td:last-child{text-align:right}
 .dr-hero div{padding:10px 12px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px;min-width:0}
 .dr-hero div:last-child{border-right:0}
 .dr-hero span{font-size:11.5px;color:var(--ink-3)}
+.dr-hero small{font-size:12px;color:var(--ink-2);font-family:var(--f-mono)}
 .dr-hero b{font-family:var(--f-display);font-stretch:80%;font-weight:650;font-size:21px;font-variant-numeric:tabular-nums;line-height:1.15}
 .dr-text p{margin:0 0 8px;font-size:13.5px;color:var(--ink-2)}
 .dr-text p b{color:var(--ink);font-weight:600}
@@ -863,7 +864,7 @@ function sparkSVG(key,color){
   const last=pts[pts.length-1];
   return`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="var(${color})" stroke-width="1.6" vector-effect="non-scaling-stroke"/><circle cx="${x(last[0])}" cy="${y(last[1])}" r="2.6" fill="var(${color})" stroke="var(--surface)" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
 }
-function dayRange(key){const rows=S.today;if(!rows)return null;const v=rows.map(r=>r.v[key]).filter(x=>x!=null);if(!v.length)return null;return[Math.min(...v),Math.max(...v)]}
+function dayRange(key){const rows=S.today;if(!rows)return null;let lo=null,hi=null;for(const r of rows){const x=r.v[key];if(x==null)continue;if(!lo||x<lo.v)lo={v:x,m:r.m};if(!hi||x>hi.v)hi={v:x,m:r.m}}if(!lo)return null;return[lo.v,hi.v,lo.m,hi.m]}
 function renderTiles(){
   if(!S.data){$("#tiles").innerHTML="";return}
   const st=parseStatus(S.data.DevStatus)||{};const running=st.mode==="MOD"||st.mode==="PRA";const pcp=isPCP();const T=[];
@@ -871,7 +872,7 @@ function renderTiles(){
   const bT=temp("BoilerTempAct"),sT=temp("BoilerTempCmd");
   if(bT!=null){TID="boiler";const d=sT!=null?bT-sT:null;T.push(tile(pcp?"Tepelné čerpadlo":"Kotol",bT,"°C",`cieľ ${fmtT(sT,0)}${d!=null?` · ${d>=0?"+":""}${fmt(d)} K`:""}${temp("CH1ReturnTempAct")!=null?` · spiatočka ${fmt(temp("CH1ReturnTempAct"))}`:""}`,sparkSVG("tkociol","--s2"),running?`<span class="chip hot">ohrieva</span>`:`<span class="chip">${esc((MODES[st.mode]||{}).l||"")}</span>`))}
   const w=temp("DHWTempAct");if(w!=null){TID="dhw";const c=temp("DHWTempCmd"),hs=temp("DHWHist");T.push(tile("Teplá voda (TÚV)",w,"°C",`cieľ ${fmtT(c,0)}${hs!=null&&c!=null?` · dohrev pod ${fmt(c-hs,0)} °C`:""}`,sparkSVG("tcwu","--s1"),st.cwu?`<span class="chip hot">nabíja</span>`:"",1,tcolor(w)))}
-  const o=temp("WeaTempAct");if(o!=null){TID="wea";const r=dayRange("tpog");T.push(tile("Vonku",o,"°C",r?`dnes ${fmt(r[0])} až ${fmt(r[1])} °C`:"",sparkSVG("tpog","--s1")))}
+  const o=temp("WeaTempAct");if(o!=null){TID="wea";const r=dayRange("tpog");T.push(tile("Vonku",o,"°C",r?`dnes min ${fmt(r[0])} (${hhmm(r[2])}) · max ${fmt(r[1])} °C (${hhmm(r[3])})`:"",sparkSVG("tpog","--s1")))}
   circuits().forEach(c=>{TID="ch"+c.k;if(c.room==null){if(c.mix!=null)T.push(tile(esc(chName(c.k))+" · za miešačom",c.mix,"°C",c.valve!=null?`ventil otvorený na ${Math.round(c.valve)} %`:"",sparkSVG("tco"+(c.k+1),"--s3"),c.pump?`<span class="chip hot">kúri</span>`:""));return}const key=c.k===0?"tpok":"tpok"+(c.k+1);const tgt=c.com!=null?`komfort ${fmt(c.com)} · úspora ${fmt(c.eco)}`:(c.mix!=null?`miešač ${fmtT(c.mix)}`:"");
     T.push(tile("Izba · "+esc(chName(c.k)),c.room,"°C",tgt,sparkSVG(key,"--s2"),c.pump?`<span class="chip hot">kúri</span>`:""))});
   const ex=temp("B017");if(ex!=null&&!pcp){TID="exhaust";T.push(tile("Spaliny",ex,"°C",temp("B016")!=null?`podávač ${fmtT(temp("B016"))}`:"",sparkSVG("tspaliny","--s8"),"",0,exColor(ex)))}
@@ -903,7 +904,7 @@ function dayStats(rows){
     if(g==="run"){s.runMin+=r.dt;s.modSum+=r.mod*r.dt;s.modN+=r.dt;s.fanSum+=r.fan*r.dt}
     if(g==="ign"&&prevG!=="ign")s.starts++;prevG=g;
     s.outN=Math.max(s.outN,r.flags.length);for(let i=0;i<r.flags.length;i++){if(r.flags[i]==="1")s.outs[i]=(s.outs[i]||0)+r.dt}
-    for(const k in r.v){const x=r.v[k];if(x==null)continue;const o=s.series[k]||(s.series[k]={min:x,max:x,sum:0,n:0,last:x});o.min=Math.min(o.min,x);o.max=Math.max(o.max,x);o.sum+=x*r.dt;o.n+=r.dt;o.last=x}}
+    for(const k in r.v){const x=r.v[k];if(x==null)continue;const o=s.series[k]||(s.series[k]={min:x,max:x,minAt:r.m,maxAt:r.m,sum:0,n:0,last:x});if(x<o.min){o.min=x;o.minAt=r.m}if(x>o.max){o.max=x;o.maxAt=r.m}o.sum+=x*r.dt;o.n+=r.dt;o.last=x}}
   s.avgMod=s.modN?s.modSum/s.modN:null;s.avgFan=s.modN?s.fanSum/s.modN:null;for(const k in s.series){const o=s.series[k];o.avg=o.n?o.sum/o.n:null}
   return s;
 }
@@ -946,6 +947,8 @@ function lineChartSVG(ch,W,H){
     g+=`<path d="${d}" fill="none" stroke="var(${s.c})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
     const last=[...rows].reverse().find(r=>r.v[s.k]!=null);if(last)g+=`<circle cx="${sx(last.m)}" cy="${sy(last.v[s.k])}" r="3.5" fill="var(${s.c})" stroke="var(--surface)" stroke-width="2"/>`;
   }
+  for(const mk of ch.marks||[]){const x=sx(mk.m),y=sy(mk.v),ta=x<ML+60?"start":x>W-MR-60?"end":"middle";
+    g+=`<circle cx="${x}" cy="${y}" r="4.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/><text x="${x}" y="${mk.below?y+17:y-9}" text-anchor="${ta}" style="font:600 11px var(--f-mono);fill:var(--ink)">${esc(mk.l)}</text>`}
   g+=`<g class="hov" visibility="hidden"><line class="hx" y1="${top}" y2="${top+ph}" stroke="var(--ink-3)" stroke-dasharray="3 3"/>${ch.series.map(s=>`<circle data-k="${s.k}" r="4" fill="var(${s.c})" stroke="var(--surface)" stroke-width="2"/>`).join("")}</g>`;
   g+=`<rect class="hit" x="${ML}" y="${MT}" width="${pw}" height="${H-MT-MB}" fill="transparent"/>`;
   return`<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${esc(ch.title)}">${g}</svg>`;
@@ -1173,7 +1176,7 @@ function renderInfo(){
   if(!S.data){$("#info").innerHTML="";$("#notify").innerHTML="";return}
   const parts=devType().split(/[_ ]+/);const m0=parts[0]||"";const mdl=m0==="BAZA"?"SKZP-05T":m0.replace(/^(SKZP-\d+)[A-Z]+$/i,"$1");
   const fw=(parts.find(p=>/^V?\d+\.\d+/i.test(p))||"—").replace(/^v/,"V");const fd=(parts.find(p=>/^\d{4}-\d{2}-\d{2}/.test(p))||"—").slice(0,10);
-  const kv=[["Typ zariadenia",mdl.startsWith("PCP")?"Regulátor tepelného čerpadla":"Regulátor kotla"],["Model",mdl||"—"],["Firmvér",fw],["Dátum firmvéru",fd],["Čas od reštartu",S.data.UpTime||"—"],["Údaje v apke","obnovujú sa každých 10 s"],
+  const kv=[["Typ zariadenia",mdl.startsWith("PCP")?"Regulátor tepelného čerpadla":"Regulátor kotla"],["Model",mdl||"—"],["Firmvér",fw],["Dátum firmvéru",fd],["Čas od reštartu",S.data.UpTime||"—"],["Údaje v apke","obnovujú sa každých 6 s"],
     ["Regulátor posiela údaje",S.tsGaps.length>=2?`približne každých ${Math.round(S.tsGaps.reduce((a,b)=>a+b,0)/S.tsGaps.length/1000)} s`:"meria sa…"],
     ["Hodiny regulátora",S.data.TimeStamp?String(S.data.TimeStamp).replace(/-/g,":")+(S.clockOff!=null&&Math.abs(S.clockOff)>=3?` (${S.clockOff<0?"meškajú":"idú napred"} o ${Math.abs(S.clockOff)} min)`:""):"—"],["ID regulátora",S.id],["Server",S.data._vpsServer||"—"],
     ["Celková spotreba paliva",raw("BuTotalFuel")!=null?fmt(Number(raw("BuTotalFuel"))/100,0)+" kg":null]].filter(x=>x[1]!=null);
@@ -1189,7 +1192,7 @@ function ignitionTimes(rows){const out=[];let prev=null;for(const r of rows||[])
 const hhmm=m=>pad2(Math.floor(m/60))+":"+pad2(Math.floor(m%60));
 function detailDef(id){
   const st=parseStatus(S.data?.DevStatus)||{};const ds=S.today&&S.today.length?dayStats(S.today):null;const se=ds?.series||{};
-  const statLine=k=>se[k]?`<p class="dstat">Dnes: min <b>${fmt(se[k].min)}</b> · priemer <b>${fmt(se[k].avg)}</b> · max <b>${fmt(se[k].max)}</b> °C</p>`:"";
+  const statLine=k=>se[k]?`<p class="dstat">Dnes: min <b>${fmt(se[k].min)}</b> o ${hhmm(se[k].minAt)} · priemer <b>${fmt(se[k].avg)}</b> · max <b>${fmt(se[k].max)}</b> o ${hhmm(se[k].maxAt)} °C</p>`:"";
   const onTime=i=>ds&&ds.outN>i?`<p class="dstat">Dnes zapnuté spolu <b>${hm(ds.outs[i]||0)}</b></p>`:"";
   const m=MODES[st.mode]||{l:st.mode||"—"};
   if(id==="boiler"){const t=temp("BoilerTempAct"),c=temp("BoilerTempCmd"),h=temp("BuIntHist");
@@ -1204,10 +1207,10 @@ function detailDef(id){
   if(id==="dhwc"){const md=String(raw("DHWCMode")??"");return{title:"Cirkulácia TÚV",hero:[["Režim",L.active[md]||md||"—"],["Čerpadlo",st.circ?"beží":"stojí"],["Zapína od",fmtT(temp("DHWCTempON"),0)]],
       text:`<p>Cirkulačné čerpadlo preháňa teplú vodu potrubím, aby z kohútika tiekla teplá hneď. Spína sa len keď má bojler aspoň ${fmtT(temp("DHWCTempON"),0)}.</p>`+onTime(4),act:[4],groups:["dhwc"]}}
   if(id==="wea"){const o=temp("WeaTempAct"),s1=temp("WeaTempStopCH1"),s2=temp("WeaTempStopCH2");
-    return{title:"Vonkajšia teplota",hero:[["Teraz",fmtT(o)],["Dnes min",se.tpog?fmtT(se.tpog.min):"—"],["Dnes max",se.tpog?fmtT(se.tpog.max):"—"]],
+    return{title:"Vonkajšia teplota",hero:[["Teraz",fmtT(o)],["Dnes min",se.tpog?fmtT(se.tpog.min):"—",se.tpog?"o "+hhmm(se.tpog.minAt):""],["Dnes max",se.tpog?fmtT(se.tpog.max):"—",se.tpog?"o "+hhmm(se.tpog.maxAt):""]],
       text:`<p>Podľa vonkajšej teploty regulátor posúva teplotu za miešačom (ekviterm)${raw("WeaCorr")!=null?`, korekcia je nastavená na ${raw("WeaCorr")}`:""}.</p>`+
         (s1!=null?`<p>ÚK1 sa vypne, keď je vonku viac ako <b>${fmt(s1,0)} °C</b>${s2!=null?`, ÚK2 nad <b>${fmt(s2,0)} °C</b>`:""}.</p>`:"")+statLine("tpog"),
-      chart:{series:[{k:"tpog",l:"Vonku",c:"--s1"}]},groups:["wea"]}}
+      chart:{series:[{k:"tpog",l:"Vonku",c:"--s1"}],marks:se.tpog?[{m:se.tpog.minAt,v:se.tpog.min,l:"min "+fmt(se.tpog.min)+" · "+hhmm(se.tpog.minAt),below:true},{m:se.tpog.maxAt,v:se.tpog.max,l:"max "+fmt(se.tpog.max)+" · "+hhmm(se.tpog.maxAt)}]:null},groups:["wea"]}}
   if(/^ch\d$/.test(id)){const k=+id[2];const c=circuits().find(x=>x.k===k);if(!c)return null;const cmd=temp(k===0?"CH1MixTempCmd":"C"+k+"07");
     const lo=temp("C"+k+"28"),hi=temp("C"+k+"29"),base=temp("C"+k+"27");
     return{title:c.name,hero:[[c.room!=null?"Izba":"Za miešačom",fmtT(c.room!=null?c.room:c.mix)],["Ventil",c.valve!=null?Math.round(c.valve)+" %":"—"],["Čerpadlo",c.pump?"beží":"stojí"]],
@@ -1248,7 +1251,7 @@ function renderDetail(){
   const d=detailDef(S.detail);if(!d){closeDetail();return}
   const G=groupDefs().filter(g=>d.groups.includes(g.id));const sc=dr.scrollTop;
   let h=`<div class="dr-h"><h2 id="dTitle">${esc(d.title)}</h2><button class="iconbtn" data-act="closeDetail" aria-label="Zavrieť">✕</button></div>`;
-  h+=`<div class="dr-hero">${d.hero.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}</div><div class="dr-text">${d.text||""}</div>`;
+  h+=`<div class="dr-hero">${d.hero.map(([k,v,sub])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b>${sub?`<small>${esc(sub)}</small>`:""}</div>`).join("")}</div><div class="dr-text">${d.text||""}</div>`;
   if(d.chart&&S.today&&S.today.length&&d.chart.series.some(s=>S.today.some(r=>r.v[s.k]!=null)))h+=`<div class="chart" id="dChart"><div class="chart-h"><h3>Dnes</h3><div class="legend">${d.chart.series.map(s=>`<span><i style="background:var(${s.c})"></i>${esc(s.l)}</span>`).join("")}${(d.chart.ref||[]).map(r=>`<span><i class="dash"></i>${esc(r.l)} ${fmt(r.v,0)}</span>`).join("")}</div></div><div class="plot"></div><div class="tip" hidden></div></div>`;
   if(d.act&&S.today&&S.today.length){const ds=dayStats(S.today);const list=d.act.filter(i=>i<ds.outN).map(i=>({n:OUT_NAMES[i],i}));if(list.length)h+=`<div class="chart" id="dAct"><div class="chart-h"><h3>Kedy bolo zapnuté (dnes)</h3></div><div class="plot"></div></div>`;d._act=list}
   if(G.length){h+=`<div class="dr-set"><div class="dr-set-h"><h3>Nastavenia</h3><button class="switch" role="switch" aria-checked="${S.unlocked}" data-act="toggleUnlock"><span class="trk"></span><span>Povoliť úpravy</span></button></div>`;
@@ -1256,7 +1259,7 @@ function renderDetail(){
     h+=`<p class="note">${S.unlocked?"Zmenené hodnoty sa zobrazia v lište dole; do regulátora idú až po stlačení „Odoslať do regulátora“.":"Úpravy sú zamknuté. Zapnite „Povoliť úpravy“."}</p></div>`}
   dr.innerHTML=h;dr.scrollTop=sc;dr.hidden=false;$("#scrim").hidden=false;
   S.dchart=null;const dc=$("#dChart");
-  if(dc){const ch={id:"detail",title:d.title,el:dc,rows:S.today,series:d.chart.series,unit:d.chart.unit||"°C",fixed:d.chart.fixed,ref:d.chart.ref,area:!!d.chart.fixed,h:170};S.dchart=ch;
+  if(dc){const ch={id:"detail",title:d.title,el:dc,rows:S.today,series:d.chart.series,unit:d.chart.unit||"°C",fixed:d.chart.fixed,ref:d.chart.ref,marks:d.chart.marks,area:!!d.chart.fixed,h:170};S.dchart=ch;
     const box=dc.querySelector(".plot");const W=Math.max(260,Math.round(box.clientWidth||380));box.innerHTML=lineChartSVG(ch,W,ch.h);
     const svg=box.querySelector("svg"),hit=svg.querySelector(".hit");const mv=e=>{const r=svg.getBoundingClientRect();const x=(e.clientX-r.left)*(W/r.width);hover(clamp((x-ML)/(W-ML-MR)*1440,0,1440),ch)};
     hit.addEventListener("pointermove",mv);hit.addEventListener("pointerdown",mv);hit.addEventListener("pointerleave",()=>hover(null))}
@@ -1338,7 +1341,7 @@ let rzT=null;new ResizeObserver(()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(S.
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!$("#login").hidden)$("#login").hidden=true;else if(S.detail)closeDetail()}
   const dd=e.target.closest?.("[data-detail]");if(dd&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openDetail(dd.dataset.detail)}});
 
-setInterval(()=>{if(!document.hidden)refresh()},10000);
+setInterval(()=>{if(!document.hidden)refresh()},6000);
 setInterval(()=>{if(!document.hidden)loadToday()},300000);
 setInterval(renderHeader,5000);
 bindHold();
