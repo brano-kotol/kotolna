@@ -375,6 +375,16 @@ table.raw td:last-child{text-align:right}
 .sbar-t{position:relative;height:16px;margin-top:3px;font:10.5px var(--f-mono);color:var(--ink-3)}
 .sbar-t span{position:absolute;transform:translateX(-50%)}
 .sbar-t span:first-child{transform:none}.sbar-t span:last-child{transform:translateX(-100%)}
+
+.fuel-alert{display:flex;align-items:center;gap:14px;padding:12px 16px;flex-wrap:wrap;border-color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,var(--surface))}
+.fuel-alert.crit{border-color:var(--crit);background:var(--crit-soft)}
+.fa-ic{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:800 19px var(--f-display);background:var(--warn);color:#1b1b1b;flex:none}
+.fuel-alert.crit .fa-ic{background:var(--crit);color:#fff}
+.fa-tx{flex:1 1 260px;display:flex;flex-direction:column;gap:2px;min-width:0;font-size:13.5px;color:var(--ink-2)}
+.fa-tx>b{font-size:15px;color:var(--ink)}
+.fuel-alert.crit .fa-tx>b{color:var(--crit-ink)}
+.fa-bt{display:flex;gap:8px;flex-wrap:wrap}
+.fa-bt .btn{height:34px;font-size:13px}
 @media (max-width:900px){
   .hero{grid-template-columns:1fr}
   .plant{border-right:0;border-bottom:1px solid var(--line)}
@@ -403,6 +413,7 @@ table.raw td:last-child{text-align:right}
 </div>
 
 <main class="wrap" id="app">
+  <div id="fuelAlert" hidden></div>
   <section aria-label="Schéma a stav">
     <div class="card hero">
       <div class="plant">
@@ -719,19 +730,20 @@ function schemaSVG(){
     g+=`<path d="M22 58 H124 V146 L100 184 H58 L22 146 Z" fill="none" stroke="${RED}" stroke-width="6" stroke-linejoin="round"/>`;
     g+=`<path d="M16 54 L130 46 L132 56 L18 62 Z" fill="${RED2}"/><rect x="60" y="48" width="18" height="5" rx="2" fill="${STEEL}" transform="rotate(-4 69 50)"/>`;
     g+=`<rect x="56" y="184" width="46" height="12" fill="${RED}"/></g>`;
-    g+=`<text class="lbl" x="18" y="16">Zásobník štiepky</text>${pct<.2&&rem!=null?`<text class="smm" x="128" y="16" text-anchor="end" style="fill:var(--crit-ink);font-weight:600">doplniť!</text>`:""}`;
+    g+=`<text class="lbl" x="18" y="16">Zásobník štiepky</text>${pct<.2&&rem!=null?`<text x="73" y="${Math.min(110,lvlY-12)}" text-anchor="middle" style="font:700 ${CP?16:13}px var(--f-body);fill:var(--crit-ink)">doplniť!</text>`:""}`;
     if(rem!=null)g+=`<text class="big" x="18" y="42" style="font-size:26px">${fmt(rem,0)}<tspan class="unit" dx="2">kg</tspan></text><text class="smm" x="128" y="40" text-anchor="end">${fmt(pct*100,0)} %</text>`;
     // ---- auger feeder ----
     g+=`<g ${DTL_ATTR("feeder","Podávač")}><title>Podávač: ${st.feeder?"beží":"stojí"}${feedT!=null?`, ${fmt(feedT)} °C`:""}</title><rect x="22" y="188" width="32" height="28" rx="4" fill="${BLK}"/><rect x="27" y="193" width="22" height="18" rx="2" fill="${STEEL}"/>`;
     g+=`<rect x="52" y="194" width="${BX-52}" height="16" rx="8" fill="${BLK}"/><g clip-path="url(#tubeClip)"><g class="${st.feeder?"auger run":"auger"}">`;
     for(let x=44;x<BX+16;x+=9)g+=`<path d="M${x} 196 L${x+6} 208" stroke="#8b8f96" stroke-width="2.4" stroke-linecap="round"/>`;
     g+=`</g></g><circle cx="38" cy="202" r="4" fill="${st.feeder?"var(--ember)":"#6b6f76"}"/></g>`;
-    g+=`<text class="lbl" x="18" y="238">Podávač</text><text class="smm" x="18" y="254"><tspan style="fill:${st.feeder?"var(--ember-ink)":"var(--ink-2)"};font-weight:600">${st.feeder?"● beží":"○ stojí"}</tspan>${feedT!=null?(CP?` ${fmt(feedT,0)}°C`:` · ${fmt(feedT)} °C`):""}</text>`;
+    g+=`<text class="lbl" x="18" y="${CP?234:238}">Podávač</text><text class="smm" x="18" y="${CP?251:254}"><tspan style="fill:${st.feeder?"var(--ember-ink)":"var(--ink-2)"};font-weight:600">${st.feeder?"● beží":"○ stojí"}</tspan>${feedT!=null&&!CP?` · ${fmt(feedT)} °C`:""}</text>`;
+    if(CP&&feedT!=null)g+=`<text class="smm" x="18" y="268">${fmt(feedT)} °C</text>`;
     // ---- blower ----
     const fan=st.fan||0,dur=fan>0?(0.22+1.3*(1-fan/100)).toFixed(2):0;
     g+=`<g ${DTL_ATTR("fan","Ventilátor")}><title>Ventilátor: ${fan} %</title><path d="M${BX-50} 232 V222 H${BX}" fill="none" stroke="${BLK}" stroke-width="9" stroke-linejoin="round"/>${fan>0?`<path class="air" d="M${BX-50} 232 V222 H${BX}" fill="none"/>`:""}`;
     g+=`<circle cx="${BX-50}" cy="248" r="18" fill="${BLK}"/><circle cx="${BX-50}" cy="248" r="13" fill="${STEEL}"/><g transform="translate(${BX-50} 248)"><g class="${fan>0?"fanrot":""}" style="--fd:${dur}s" fill="#c9ccd1">${fanBlades()}</g><circle r="3" fill="${BLK}"/></g></g>`;
-    g+=`<text class="lbl" x="18" y="282">Ventilátor</text><text class="smm" x="18" y="298"><tspan style="fill:var(--ink);font-weight:600">${fan} %</tspan>${raw("BuIntAirPwr")!=null&&!CP?` · pri horení ${raw("BuIntAirPwr")} %`:""}</text>`;
+    g+=`<text class="lbl" x="18" y="${CP?288:282}">Ventilátor</text><text class="smm" x="18" y="${CP?304:298}"><tspan style="fill:var(--ink);font-weight:600">${fan} %</tspan>${raw("BuIntAirPwr")!=null&&!CP?` · pri horení ${raw("BuIntAirPwr")} %`:""}</text>`;
   }
   // buffer
   if(buf!=null){const bx=BX+BW+40;
@@ -1249,7 +1261,7 @@ function detailDef(id){
     const pct=rem!=null&&cap>0?rem/cap*100:null;const days=rem!=null&&d24>0?rem/d24:null;const b=burnerModel();
     return{title:"Zásobník štiepky",hero:[["Zostatok",rem!=null?fmt(rem,1)+" kg":"—"],["Naplnenie",pct!=null?fmt(pct,0)+" %":"—"],["Vydrží",days!=null?"≈ "+fmt(days,1)+" dňa":"—"]],
       text:(pct!=null&&pct<20?`<p class="warn">Paliva je málo, doplňte zásobník.</p>`:"")+`<p>Kapacita ${fmt(cap,0)} kg. Za posledných 24 h horák spotreboval <b>${fmt(d24,1)} kg</b>${act?`, práve teraz ${fmt(act,2)} kg/h`:""}.</p>`+
-        (tot!=null?`<p>Od spustenia regulátora spolu <b>${Math.round(tot).toLocaleString("sk-SK")} kg</b> (≈ ${fmt(tot/1000,1)} t).</p>`:"")+(b?.kgh!=null?`<p>Pri horení podľa nastavení ide asi ${fmt(b.kgh,1)} kg/h.</p>`:""),groups:[]}}
+        (tot!=null?`<p>Od spustenia regulátora spolu <b>${Math.round(tot).toLocaleString("sk-SK")} kg</b> (≈ ${fmt(tot/1000,1)} t).</p>`:"")+(b?.kgh!=null?`<p>Pri horení podľa nastavení ide asi ${fmt(b.kgh,1)} kg/h.</p>`:"")+fuelWarnHTML(),groups:[]}}
   if(id==="feeder"){const b=burnerModel();return{title:"Podávač paliva",hero:[["Stav",st.feeder?"beží":"stojí"],["Teplota",fmtT(temp("B016"))],["Cyklus",b?`${fmt(b.fd)} / ${fmt(b.bk)} s`:"—"]],
       text:(b?`<p>Pri horení šnek sype <b>${fmt(b.fd)} s</b> a potom <b>${fmt(b.bk)} s</b> stojí (beží ${fmt(b.duty*100,0)} % času).${b.eff!=null?` Za hodinu nepretržitého chodu by prepravil ${fmt(b.eff,1)} kg.`:""}</p>`:"")+
         `<p>Teplotu podávača regulátor stráži, aby oheň neprehorel späť do zásobníka.</p>`+onTime(0),act:[0],groups:["burner"]}}
@@ -1273,6 +1285,10 @@ function detailDef(id){
       text:`<p>Studená voda vracajúca sa do kotla spôsobuje kondenzáciu a dechtovanie. Keď spiatočka klesne pod ${fmtT(mn,0)}, regulátor priškrtí miešač, aby sa kotol rýchlejšie zohrial.</p>`,groups:[]}}
   return null;
 }
+function fuelWarnHTML(){const f=fuelState();if(!f)return"";
+  return`<div class="dr-set"><div class="dr-set-h"><h3>Upozornenie na málo paliva</h3><button class="switch" role="switch" aria-checked="${f.on}" data-act="fuelWarn"><span class="trk"></span><span>${f.on?"Zapnuté":"Vypnuté"}</span></button></div>
+    <div class="prow"><span class="pl">Upozorniť, keď klesne pod</span><div class="stepper"><button data-act="fuelLim" data-d="-5" ${!f.on||f.lim<=5?"disabled":""} aria-label="Znížiť hranicu">−</button><output>${fmt(f.lim,0)} %</output><button data-act="fuelLim" data-d="5" ${!f.on||f.lim>=60?"disabled":""} aria-label="Zvýšiť hranicu">+</button></div></div>
+    <p class="note">Upozornenie sa zobrazí hore v apke, keď je apka otvorená. Platí len v tomto telefóne alebo počítači. Ak chcete správu aj keď je apka zavretá, zapnite dole v sekcii Regulátor „Posielať e-mail pri alarme“. Timel potom pošle e-mail, keď regulátor nahlási nízku hladinu paliva.</p></div>`}
 function renderDetail(){
   const dr=$("#drawer");if(!S.detail||!S.data){dr.hidden=true;$("#scrim").hidden=true;S.dchart=null;return}
   const d=detailDef(S.detail);if(!d){closeDetail();return}
@@ -1295,10 +1311,23 @@ function renderDetail(){
 let lastFocus=null;
 function openDetail(id){lastFocus=document.activeElement;S.detail=id;renderDetail();$("#drawer").scrollTop=0;setTimeout(()=>$("#drawer .dr-h button")?.focus(),30)}
 function closeDetail(){S.detail=null;S.dchart=null;$("#drawer").hidden=true;$("#scrim").hidden=true;lastFocus?.focus?.()}
+/* ---------- low fuel warning ---------- */
+function fuelState(){const cap=num("B060"),r=num("B062");if(cap==null||r==null||cap<=0)return null;const rem=r/10,pct=clamp(rem/cap*100,0,100);
+  const d24=num("Bu24hFuel")!=null?num("Bu24hFuel")/100:null;const hours=d24>0?rem/d24*24:null;
+  const lim=Number(LS.get("tp_fuelLimit")||num("B059")||20);const on=LS.get("tp_fuelWarn")!=="0";return{cap,rem,pct,d24,hours,lim,on,low:pct<lim||String(S.data?.Alarms||"").includes("U")||String(S.data?.Alarms||"").includes("7")}}
+function fmtWhen(h){const t=new Date(Date.now()+h*3600e3);const today=new Date();const dd=Math.round((new Date(t.toDateString())-new Date(today.toDateString()))/864e5);
+  return(dd===0?"dnes":dd===1?"zajtra":dd===2?"pozajtra":t.getDate()+". "+(t.getMonth()+1)+".")+" okolo "+pad2(t.getHours())+":00"}
+function renderFuelAlert(){const el=$("#fuelAlert");const f=S.data?fuelState():null;
+  const dis=Number(LS.get("tp_fuelDismiss")||-1);if(f&&dis>=0&&f.rem>dis+10)LS.del("tp_fuelDismiss");
+  const show=f&&f.on&&f.low&&!(dis>=0&&f.rem<=dis+10);el.hidden=!show;if(!show){el.innerHTML="";return}
+  const crit=f.pct<f.lim/2||(f.hours!=null&&f.hours<6);
+  el.className="card fuel-alert"+(crit?" crit":"");
+  el.innerHTML=`<div class="fa-ic" aria-hidden="true">!</div><div class="fa-tx"><b>Málo paliva: ${fmt(f.rem,0)} kg (${fmt(f.pct,0)} %)</b><span>${f.hours!=null?`Pri dnešnej spotrebe vydrží asi ${f.hours<24?fmt(f.hours,0)+" h":fmt(f.hours/24,1)+" dňa"}, doplňte najneskôr <b>${fmtWhen(f.hours)}</b>.`:"Doplňte zásobník štiepky."} Upozornenie sa ukáže pod ${fmt(f.lim,0)} %.</span></div>
+    <div class="fa-bt"><button class="btn light" data-act="fuelDismiss">Skryť do doplnenia</button><button class="btn light" data-detail="fuel">Nastaviť</button></div>`}
 /* ---------- misc ---------- */
 let toastT=null;
 function toast(msg,err){const t=$("#toast");t.textContent=msg;t.className="toast"+(err?" err":"");t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,4200)}
-function renderAll(){renderHeader();renderHero();renderTiles();renderBurner();renderSettings();renderCmds();renderInfo()}
+function renderAll(){renderFuelAlert();renderHeader();renderHero();renderTiles();renderBurner();renderSettings();renderCmds();renderInfo()}
 
 /* ---------- loading ---------- */
 async function refresh(){
@@ -1309,7 +1338,7 @@ async function refresh(){
     S.data=d;S.err=null;S.offline=false;trackValves();
     for(const k in S.optim){if(S.optim[k].until<Date.now()||String(orig(k))===String(S.optim[k].v))delete S.optim[k]}
   }catch(e){if(e.code==="auth"){logout(e.message);return}if(e.status===503)S.offline=true;else S.err=e.message}
-  renderHeader();renderHero();renderTiles();renderBurner();renderInfo();if(S.detail&&!document.activeElement?.closest?.("#drawer .stepper,#drawer .seg"))renderDetail();
+  renderFuelAlert();renderHeader();renderHero();renderTiles();renderBurner();renderInfo();if(S.detail&&!document.activeElement?.closest?.("#drawer .stepper,#drawer .seg"))renderDetail();
   if(!document.querySelector(".prow button:focus, .seg button:focus"))renderSettings();
   if(!$("#cmds").children.length)renderCmds();
 }
@@ -1340,6 +1369,9 @@ document.addEventListener("click",async e=>{
   if(a==="refresh"){refresh();loadToday();if(S.date!==todayStr())loadDay()}
   else if(a==="login")showLogin();
   else if(a==="closeDetail")closeDetail();
+  else if(a==="fuelDismiss"){const f=fuelState();if(f)LS.set("tp_fuelDismiss",String(Math.round(f.rem)));renderFuelAlert();toast("Upozornenie sa znova ukáže po doplnení zásobníka.")}
+  else if(a==="fuelWarn"){LS.set("tp_fuelWarn",LS.get("tp_fuelWarn")==="0"?"1":"0");renderFuelAlert();renderDetail()}
+  else if(a==="fuelLim"){const f=fuelState();const v=clamp((f?f.lim:20)+Number(b.dataset.d),5,60);LS.set("tp_fuelLimit",String(v));LS.del("tp_fuelDismiss");renderFuelAlert();renderDetail()}
   else if(a==="schemaGo")schemaGo(b.dataset.part);
   else if(a==="goCmd")$("#cmdSec").scrollIntoView({behavior:"smooth"});
   else if(a==="closeLogin"){$("#login").hidden=true;if(!S.data||S.be!==Demo)await startDemo()}
