@@ -469,6 +469,9 @@ const hm=min=>{min=Math.round(min);return Math.floor(min/60)+" h "+pad2(min%60)+
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
+const clock=t=>{const d=new Date(t);return pad2(d.getHours())+":"+pad2(d.getMinutes())+":"+pad2(d.getSeconds())};
+function ctrlName(c){const n=String(c?.name||"").trim();if(!n)return c?.dev_id||"";return /^m[oó]j\s+sterownik$/i.test(n)?"Môj regulátor":n}
+function ctrlClockOffset(ts,now){const m=String(ts).match(/(\d{1,2})-(\d{2})-(\d{2})/);if(!m)return null;const d=new Date(now);const c=new Date(d.getFullYear(),d.getMonth(),d.getDate(),+m[1],+m[2],+m[3]);let diff=Math.round((c-d)/60000);if(diff>720)diff-=1440;if(diff<-720)diff+=1440;return diff}
 /* ---------- API (e.timel.pl) ---------- */
 const API_BASE="https://e.timel.pl/api";
 class ApiError extends Error{constructor(m,s,c){super(m);this.status=s;this.code=c}}
@@ -548,7 +551,7 @@ const Demo={
 };
 
 /* ---------- state ---------- */
-const S={act:null,detail:null,dchart:null,be:Demo,ctrls:[],id:null,data:null,pending:{},optim:{},unlocked:LS.get("tp_unlock")==="1",
+const S={tsGaps:[],clockOff:null,fetchedAt:0,act:null,detail:null,dchart:null,be:Demo,ctrls:[],id:null,data:null,pending:{},optim:{},unlocked:LS.get("tp_unlock")==="1",
   lastTs:null,lastTsAt:Date.now(),err:null,offline:false,date:todayStr(),cache:{},today:null,day:null,dayErr:null,dayLoading:false,
   week:null,weekLoading:false,sending:false,notifyBusy:false,charts:[]};
 
@@ -827,7 +830,7 @@ function renderHeader(){
   $("#btnAccount").innerHTML=S.be.demo?"<span>Prihlásiť</span>":"<span>Odhlásiť</span>";
   $("#btnAccount").dataset.act=S.be.demo?"login":"logout";
   const pick=$("#ctrlPick");pick.hidden=S.ctrls.length<2&&S.be.demo;
-  pick.innerHTML=S.ctrls.map(c=>`<option value="${esc(c.dev_id)}"${c.dev_id===S.id?" selected":""}>${esc(c.name||c.dev_id)}</option>`).join("");
+  pick.innerHTML=S.ctrls.map(c=>`<option value="${esc(c.dev_id)}"${c.dev_id===S.id?" selected":""}>${esc(ctrlName(c))}</option>`).join("");
 }
 function renderHero(){
   if(!S.data){$("#schema").innerHTML=`<div class="empty">${S.err?esc(S.err):"Načítavam údaje z regulátora…"}</div>`;$("#rail").innerHTML="";return}
@@ -835,7 +838,7 @@ function renderHero(){
   const w=temp("WeaTempAct");
   $("#outdoor").innerHTML=w!=null?`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14 14.8V4a2 2 0 1 0-4 0v10.8a4 4 0 1 0 4 0z"/></svg><span>vonku</span><strong class="num">${fmt(w)}</strong><span>°C</span>`:"";
   const ctrl=S.ctrls.find(c=>c.dev_id===S.id);
-  $("#plantSub").textContent=(ctrl?.name||S.id||"")+(S.data.TimeStamp?" · aktualizované "+String(S.data.TimeStamp).replace(/-/g,":"):"");
+  $("#plantSub").textContent=ctrlName(ctrl||{dev_id:S.id})+(S.fetchedAt?" · načítané "+clock(S.fetchedAt):"");
   const st=parseStatus(S.data.DevStatus);const pcp=isPCP();const al=alarms();const bm=String(raw("BuMode")??"");
   let h="";
   if(st){const m=MODES[st.mode]||{l:st.mode,c:"--ink-3"};
@@ -1170,7 +1173,9 @@ function renderInfo(){
   if(!S.data){$("#info").innerHTML="";$("#notify").innerHTML="";return}
   const parts=devType().split(/[_ ]+/);const m0=parts[0]||"";const mdl=m0==="BAZA"?"SKZP-05T":m0.replace(/^(SKZP-\d+)[A-Z]+$/i,"$1");
   const fw=(parts.find(p=>/^V?\d+\.\d+/i.test(p))||"—").replace(/^v/,"V");const fd=(parts.find(p=>/^\d{4}-\d{2}-\d{2}/.test(p))||"—").slice(0,10);
-  const kv=[["Typ zariadenia",mdl.startsWith("PCP")?"Regulátor tepelného čerpadla":"Regulátor kotla"],["Model",mdl||"—"],["Firmvér",fw],["Dátum firmvéru",fd],["Čas od reštartu",S.data.UpTime||"—"],["ID regulátora",S.id],["Server",S.data._vpsServer||"—"],
+  const kv=[["Typ zariadenia",mdl.startsWith("PCP")?"Regulátor tepelného čerpadla":"Regulátor kotla"],["Model",mdl||"—"],["Firmvér",fw],["Dátum firmvéru",fd],["Čas od reštartu",S.data.UpTime||"—"],["Údaje v apke","obnovujú sa každých 10 s"],
+    ["Regulátor posiela údaje",S.tsGaps.length>=2?`približne každých ${Math.round(S.tsGaps.reduce((a,b)=>a+b,0)/S.tsGaps.length/1000)} s`:"meria sa…"],
+    ["Hodiny regulátora",S.data.TimeStamp?String(S.data.TimeStamp).replace(/-/g,":")+(S.clockOff!=null&&Math.abs(S.clockOff)>=3?` (${S.clockOff<0?"meškajú":"idú napred"} o ${Math.abs(S.clockOff)} min)`:""):"—"],["ID regulátora",S.id],["Server",S.data._vpsServer||"—"],
     ["Celková spotreba paliva",raw("BuTotalFuel")!=null?fmt(Number(raw("BuTotalFuel"))/100,0)+" kg":null]].filter(x=>x[1]!=null);
   $("#info").innerHTML=kv.map(([k,v])=>`<div><span>${k}</span><b>${esc(v)}</b></div>`).join("");
   const c=S.ctrls.find(x=>x.dev_id===S.id);const on=!!c?.notify_alarms;
@@ -1269,7 +1274,8 @@ function renderAll(){renderHeader();renderHero();renderTiles();renderBurner();re
 async function refresh(){
   if(!S.id)return;
   try{const d=await S.be.getData(S.id);
-    if(d?.TimeStamp&&d.TimeStamp!==S.lastTs){S.lastTs=d.TimeStamp;S.lastTsAt=Date.now()}
+    if(d?.TimeStamp&&d.TimeStamp!==S.lastTs){const now=Date.now();if(S.lastTs&&S.lastTsAt)S.tsGaps.push(now-S.lastTsAt);if(S.tsGaps.length>12)S.tsGaps.shift();S.lastTs=d.TimeStamp;S.lastTsAt=now;S.clockOff=ctrlClockOffset(d.TimeStamp,now)}
+    S.fetchedAt=Date.now();
     S.data=d;S.err=null;S.offline=false;trackValves();
     for(const k in S.optim){if(S.optim[k].until<Date.now()||String(orig(k))===String(S.optim[k].v))delete S.optim[k]}
   }catch(e){if(e.code==="auth"){logout(e.message);return}if(e.status===503)S.offline=true;else S.err=e.message}
@@ -1284,7 +1290,7 @@ async function loadDay(){
   S.dayLoading=false;renderDay();
 }
 async function selectController(id){
-  S.id=id;LS.set("tp_ctrl",id);S.data=null;S.pending={};S.optim={};S.week=null;S.today=null;S.day=null;S.lastTs=null;S.lastTsAt=Date.now();
+  S.id=id;LS.set("tp_ctrl",id);S.tsGaps=[];S.clockOff=null;S.fetchedAt=0;S.data=null;S.pending={};S.optim={};S.week=null;S.today=null;S.day=null;S.lastTs=null;S.lastTsAt=Date.now();
   renderAll();await refresh();renderCmds();if(S.date!==todayStr())loadToday();loadDay();loadWeek();
 }
 async function startDemo(){S.be=Demo;S.ctrls=await Demo.list();await selectController(S.ctrls[0].dev_id)}
