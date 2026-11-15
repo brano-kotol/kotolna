@@ -360,6 +360,11 @@ table.raw td:last-child{text-align:right}
   .sch.compact .big{font-size:36px}
   .sch.compact .unit{font-size:15px}
 }
+
+.login.full{background:var(--bg);backdrop-filter:none}
+.lg-brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-stretch:112%;font-weight:750;font-size:18px}
+.lg-brand b{color:var(--ember)}
+.lg-demo{align-self:center;font-size:12.5px;font-weight:500;color:var(--ink-3)}
 @media (max-width:900px){
   .hero{grid-template-columns:1fr}
   .plant{border-right:0;border-bottom:1px solid var(--line)}
@@ -434,12 +439,14 @@ table.raw td:last-child{text-align:right}
 
 <div class="login" id="login" hidden>
   <form class="card" id="loginForm" autocomplete="on">
+    <div class="lg-brand"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='9' fill='%230e1217'/%3E%3Crect x='11' y='7' width='18' height='5' rx='1.5' fill='%234a4f57'/%3E%3Crect x='11' y='11' width='18' height='23' rx='2' fill='%231f5fae'/%3E%3Crect x='14' y='16' width='12' height='15' rx='2' fill='%231d1712'/%3E%3Cpath d='M16 30c-1-4 2-5 3-9 1 3 2 3 3 1 2 3 2 6 1 8z' fill='%23f26b1d'/%3E%3C/svg%3E" alt="" width="40" height="40"><span>Kotolňa <b>·</b> Timel</span></div>
     <h2>Prihlásenie</h2>
     <p>Použite rovnaký e-mail a heslo ako na e.timel.pl. Údaje idú priamo na server Timel, tento panel ich nikam inam neposiela.</p>
     <label for="lgEmail">E-mail<input id="lgEmail" type="email" autocomplete="username" required></label>
     <label for="lgPass">Heslo<input id="lgPass" type="password" autocomplete="current-password" required></label>
     <div class="err" id="lgErr" hidden></div>
-    <div class="row"><button type="button" class="btn light" data-act="closeLogin">Zostať v ukážke</button><button type="submit" class="btn primary" id="lgBtn">Prihlásiť sa</button></div>
+    <div class="row"><button type="submit" class="btn primary" id="lgBtn" style="flex:1">Prihlásiť sa</button></div>
+    <button type="button" class="linkbtn lg-demo" data-act="closeLogin">Pozrieť ukážku bez prihlásenia</button>
   </form>
 </div>
 
@@ -1282,12 +1289,13 @@ async function selectController(id){
 }
 async function startDemo(){S.be=Demo;S.ctrls=await Demo.list();await selectController(S.ctrls[0].dev_id)}
 async function startLive(){
-  S.be=Live;try{S.ctrls=await Live.list()}catch(e){if(e.code==="auth"||e.code==="network"){LS.del("tp_token");await startDemo();showLogin(e.message);return}throw e}
-  if(!S.ctrls.length){await startDemo();showLogin("Účet nemá priradený žiadny regulátor. Pridajte ho v aplikácii e.timel.pl.");return}
+  S.be=Live;try{S.ctrls=await Live.list()}catch(e){if(e.code==="auth"||e.code==="network"){LS.del("tp_token");if(!START_LOGIN)await startDemo();showLogin(e.message);return}throw e}
+  if(!S.ctrls.length){if(!START_LOGIN)await startDemo();showLogin("Účet nemá priradený žiadny regulátor. Pridajte ho v aplikácii e.timel.pl.");return}
   const want=LS.get("tp_ctrl");await selectController((S.ctrls.find(c=>c.dev_id===want)||S.ctrls[0]).dev_id);
 }
-function showLogin(err){$("#login").hidden=false;const e=$("#lgErr");e.hidden=!err;e.textContent=err||"";setTimeout(()=>$("#lgEmail").focus(),50)}
-function logout(msg){LS.del("tp_token");startDemo();if(msg)showLogin(msg)}
+const START_LOGIN=true; // false = open in demo mode (used for the claude.ai preview)
+function showLogin(err){$("#login").hidden=false;$("#login").classList.toggle("full",!S.data||(START_LOGIN&&S.be.demo));const e=$("#lgErr");e.hidden=!err;e.textContent=err||"";setTimeout(()=>$("#lgEmail").focus(),50)}
+function logout(msg){LS.del("tp_token");if(START_LOGIN){S.data=null;S.be=Demo;showLogin(msg||null);return}startDemo();if(msg)showLogin(msg)}
 
 /* ---------- events ---------- */
 document.addEventListener("click",async e=>{
@@ -1298,7 +1306,7 @@ document.addEventListener("click",async e=>{
   else if(a==="closeDetail")closeDetail();
   else if(a==="schemaGo")schemaGo(b.dataset.part);
   else if(a==="goCmd")$("#cmdSec").scrollIntoView({behavior:"smooth"});
-  else if(a==="closeLogin")$("#login").hidden=true;
+  else if(a==="closeLogin"){$("#login").hidden=true;if(!S.data||S.be!==Demo)await startDemo()}
   else if(a==="logout")logout();
   else if(a==="toggleUnlock"){S.unlocked=!S.unlocked;LS.set("tp_unlock",S.unlocked?"1":"0");renderSettings();renderDetail()}
   else if(a==="inc"||a==="dec"){const st=Number(b.dataset.step);const cur=Number(raw(b.dataset.f));const nv=a==="inc"?Math.min(Number(b.dataset.max),cur+st):Math.max(Number(b.dataset.min),cur-st);setPending(b.dataset.f,Math.round(nv));
@@ -1328,7 +1336,7 @@ setInterval(()=>{if(!document.hidden)refresh()},10000);
 setInterval(()=>{if(!document.hidden)loadToday()},300000);
 setInterval(renderHeader,5000);
 bindHold();
-(LS.get("tp_token")?startLive():startDemo()).catch(e=>{S.err=e.message;renderAll()});
+(LS.get("tp_token")?startLive():START_LOGIN?Promise.resolve(showLogin(null)):startDemo()).catch(e=>{S.err=e.message;renderAll()});
 </script>
 <script>
 if("serviceWorker" in navigator && location.protocol==="https:"){addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}
