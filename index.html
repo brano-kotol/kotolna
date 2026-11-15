@@ -1288,6 +1288,7 @@ function detailDef(id){
 function fuelWarnHTML(){const f=fuelState();if(!f)return"";
   return`<div class="dr-set"><div class="dr-set-h"><h3>Upozornenie na málo paliva</h3><button class="switch" role="switch" aria-checked="${f.on}" data-act="fuelWarn"><span class="trk"></span><span>${f.on?"Zapnuté":"Vypnuté"}</span></button></div>
     <div class="prow"><span class="pl">Upozorniť, keď klesne pod</span><div class="stepper"><button data-act="fuelLim" data-d="-5" ${!f.on||f.lim<=5?"disabled":""} aria-label="Znížiť hranicu">−</button><output>${fmt(f.lim,0)} %</output><button data-act="fuelLim" data-d="5" ${!f.on||f.lim>=60?"disabled":""} aria-label="Zvýšiť hranicu">+</button></div></div>
+    ${f.alarmKg!=null?`<p class="note">Samotný kotol pípa, keď odhadovaný zostatok klesne pod <b>${fmt(f.alarmKg,0)} kg</b> (nastavenie „Alarm pri (kg)“ v regulátore). To je iné nastavenie ako toto upozornenie v apke.</p>`:""}
     <p class="note">Upozornenie sa zobrazí hore v apke, keď je apka otvorená. Platí len v tomto telefóne alebo počítači. Ak chcete správu aj keď je apka zavretá, zapnite dole v sekcii Regulátor „Posielať e-mail pri alarme“. Timel potom pošle e-mail, keď regulátor nahlási nízku hladinu paliva.</p></div>`}
 function renderDetail(){
   const dr=$("#drawer");if(!S.detail||!S.data){dr.hidden=true;$("#scrim").hidden=true;S.dchart=null;return}
@@ -1314,7 +1315,7 @@ function closeDetail(){S.detail=null;S.dchart=null;$("#drawer").hidden=true;$("#
 /* ---------- low fuel warning ---------- */
 function fuelState(){const cap=num("B060"),r=num("B062");if(cap==null||r==null||cap<=0)return null;const rem=r/10,pct=clamp(rem/cap*100,0,100);
   const d24=num("Bu24hFuel")!=null?num("Bu24hFuel")/100:null;const hours=d24>0?rem/d24*24:null;
-  const lim=Number(LS.get("tp_fuelLimit")||num("B059")||20);const on=LS.get("tp_fuelWarn")!=="0";return{cap,rem,pct,d24,hours,lim,on,low:pct<lim||String(S.data?.Alarms||"").includes("U")||String(S.data?.Alarms||"").includes("7")}}
+  const alarmKg=num("B059");const lim=Number(LS.get("tp_fuelLimit")||(alarmKg!=null?Math.round(alarmKg/cap*100):20));const on=LS.get("tp_fuelWarn")!=="0";return{cap,rem,pct,d24,hours,lim,on,alarmKg,low:pct<lim||String(S.data?.Alarms||"").includes("U")||String(S.data?.Alarms||"").includes("7")}}
 function fmtWhen(h){const t=new Date(Date.now()+h*3600e3);const today=new Date();const dd=Math.round((new Date(t.toDateString())-new Date(today.toDateString()))/864e5);
   return(dd===0?"dnes":dd===1?"zajtra":dd===2?"pozajtra":t.getDate()+". "+(t.getMonth()+1)+".")+" okolo "+pad2(t.getHours())+":00"}
 function renderFuelAlert(){const el=$("#fuelAlert");const f=S.data?fuelState():null;
