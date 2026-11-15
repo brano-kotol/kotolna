@@ -702,7 +702,12 @@ function schemaSVG(){
   br.forEach((b,i)=>{const m=isMix(b);if(b.pump&&(!m||b.valve>3)){farS=X[i];farR=m?X[i]-30:X[i]}});
   const IDLE0="var(--pipe-idle)";
   g+=`<path class="pipe" stroke="${IDLE0}" d="M${endR} ${RET} H${BX+BW+18} V240 H${BX+BW}"/><path class="pipe" stroke="${IDLE0}" d="M${BX+BW} ${SUP} H${endX}"/>`;
-  if(farS!=null)g+=`<path class="pipe" stroke="${retC}" d="M${farR} ${RET} H${BX+BW+18} V240 H${BX+BW}"/><path class="pipe" stroke="${supC}" d="M${BX+BW} ${SUP} H${farS}"/><path class="flow" d="M${BX+BW} ${SUP} H${farS}"/><path class="flow" d="M${farR} ${RET} H${BX+BW+18} V240 H${BX+BW}"/>`;
+  if(farS!=null)g+=`<path class="pipe" stroke="${supC}" d="M${BX+BW} ${SUP} H${farS}"/><path class="flow" d="M${BX+BW} ${SUP} H${farS}"/>`;
+  // return header, segment by segment: water from one circuit keeps that circuit's colour, mixed water uses the measured return temperature
+  {const RX=br.map((b,i)=>isMix(b)?X[i]-30:X[i]),FL=br.map(b=>!!b.pump&&(!isMix(b)||b.valve>3)),RC=br.map(retColOf);
+   for(let i=br.length-1;i>=0;i--){const down=[];for(let j=i;j<br.length;j++)if(FL[j])down.push(j);if(!down.length)continue;
+     const col=down.length===1?RC[down[0]]:retC;const d=i===0?`M${RX[0]} ${RET} H${BX+BW+18} V240 H${BX+BW}`:`M${RX[i]} ${RET} H${RX[i-1]}`;
+     g+=`<path class="pipe" stroke="${col}" d="${d}"/><path class="flow" d="${d}"/>`}}
   if(!pcp){
     // ---- hopper with chip level ----
     const cap=num("B060"),rem=num("B062")!=null?num("B062")/10:null;const pct=rem!=null&&cap>0?clamp(rem/cap,0,1):.7;const lvlY=184-pct*(184-58);
@@ -733,6 +738,7 @@ function schemaSVG(){
     if(bufB!=null)g+=`<text class="smm" x="${bx+29}" y="${RET+24}" text-anchor="middle">dole ${fmt(bufB)} °C</text>`;
     g+=`<path class="pipe" stroke="${supC}" d="M${bx+29} ${SUP} V118"/><path class="pipe" stroke="${tcolor(bufB??rT)}" d="M${bx+29} 246 V${RET}"/>`}
   // branches
+  function retColOf(b){return b.type==="dhw"?dhwColor(b.t):tcolor((b.feed??bT??40)-12)}
   const pill=(cx,y,t,col,unit="°C",dec=1)=>{const txt=fmt(t,dec);const w=txt.length*13+34;return`<rect x="${cx-w/2}" y="${y-27}" width="${w}" height="34" rx="17" fill="${col}"/><text x="${cx}" y="${y-2}" text-anchor="middle" style="font-family:var(--f-display);font-stretch:72%;font-weight:650;font-size:26px;fill:${textOn(col)}">${txt}<tspan style="font-size:12px;fill:${textOn(col)};opacity:.8" dx="2">${unit}</tspan></text>`};
   const IDLE="var(--pipe-idle)";
   const radiator=(rx,rt,fc,bc)=>{const fins=6,fw=7,gap=3,tw=fins*fw+(fins-1)*gap,sx=rx-tw/2,fh=216-rt;let o=`<rect x="${sx-4}" y="${rt+6}" width="${tw+8}" height="6" rx="3" fill="${fc}"/><rect x="${sx-4}" y="204" width="${tw+8}" height="6" rx="3" fill="${bc}"/>`;
@@ -744,7 +750,7 @@ function schemaSVG(){
     if(mixer){
       // 4-way mixing valve: boiler loop (N in from boiler, W out back to boiler) and heating loop (E out to radiators, S in from radiators)
       const v=clamp(b.valve,0,100)/100,VY=128,RX=cx+60,rt=152;lx=cx+30;
-      const bFlow=b.pump&&v>.03,hFlow=!!b.pump;const hot=bFlow?supC:IDLE,bret=bFlow?retC:IDLE,hsup=hFlow?fc:IDLE,hret=hFlow?tcolor((b.feed??bT??40)-12):IDLE;const wB=(2.5+5*v).toFixed(1);
+      const bFlow=b.pump&&v>.03,hFlow=!!b.pump;const hot=bFlow?supC:IDLE,bret=bFlow?tcolor((b.feed??bT??40)-12):IDLE,hsup=hFlow?fc:IDLE,hret=hFlow?tcolor((b.feed??bT??40)-12):IDLE;const wB=(2.5+5*v).toFixed(1);
       const hotC=supC,hretC=tcolor((b.feed??bT??40)-12);
       g+=`<path class="pipe" stroke="${hot}" style="stroke-width:${wB}" d="M${cx} ${SUP} V${VY-16}"/><path class="pipe" stroke="${bret}" style="stroke-width:${wB}" d="M${cx-16} ${VY} H${cx-30} V${RET}"/>`;
       g+=`<path class="pipe" stroke="${hsup}" d="M${cx+16} ${VY} H${RX} V${rt}"/><path class="pipe" stroke="${hret}" d="M${RX} 214 V238 H${cx} V${VY+16}"/>`;
@@ -767,7 +773,7 @@ function schemaSVG(){
       g+=`<text class="smm" x="${cx+8}" y="108"><tspan style="fill:var(--ink);font-weight:600">${Math.round(b.valve)} %</tspan><tspan dx="6" style="fill:${dir>0?"var(--ember-ink)":dir<0?"var(--cold)":"var(--ink-3)"}">${dir>0?"▲ otvára":dir<0?"▼ zatvára":"drží"}</tspan></text>`;
       g+=pumpG(cx+38,VY,b.pump,b.name);
     }else{
-      g+=`<path class="pipe" stroke="${b.pump?supC:IDLE}" d="M${cx} ${SUP} V138"/><path class="pipe" stroke="${b.pump?retC:IDLE}" d="M${cx} 214 V${RET}"/>`;
+      g+=`<path class="pipe" stroke="${b.pump?supC:IDLE}" d="M${cx} ${SUP} V138"/><path class="pipe" stroke="${b.pump?retColOf(b):IDLE}" d="M${cx} 214 V${RET}"/>`;
       if(b.pump)g+=`<path class="flow" d="M${cx} ${SUP} V138"/><path class="flow" d="M${cx} 214 V${RET}"/>`;
       if(b.type==="dhw"){const tc=dhwColor(b.t);
         g+=`<defs><linearGradient id="gT${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${tc}"/><stop offset=".55" stop-color="${tc}"/><stop offset="1" stop-color="${dhwColor(b.t-16)}"/></linearGradient></defs><rect x="${cx-26}" y="134" width="52" height="84" rx="20" fill="url(#gT${i})" stroke="var(--line)" stroke-width="1.5"/><path d="M${cx-12} 196 q6 -8 12 0 t12 0" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="2"/>`;
