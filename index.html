@@ -366,6 +366,15 @@ table.raw td:last-child{text-align:right}
 .lg-brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-stretch:112%;font-weight:750;font-size:18px}
 .lg-brand b{color:var(--ember)}
 .lg-demo{align-self:center;font-size:12.5px;font-weight:500;color:var(--ink-3)}
+
+.vpill{display:inline-flex;align-items:baseline;padding:0 12px 2px;border-radius:16px;line-height:1.1}
+.vpill small{color:inherit!important;opacity:.8}
+.sbar{margin:4px 0 12px}
+.sbar-g{position:relative;height:14px;border-radius:7px}
+.sbar-g i{position:absolute;top:-4px;width:6px;height:22px;margin-left:-3px;border-radius:3px;background:var(--surface);border:2px solid var(--ink);box-sizing:border-box}
+.sbar-t{position:relative;height:16px;margin-top:3px;font:10.5px var(--f-mono);color:var(--ink-3)}
+.sbar-t span{position:absolute;transform:translateX(-50%)}
+.sbar-t span:first-child{transform:none}.sbar-t span:last-child{transform:translateX(-100%)}
 @media (max-width:900px){
   .hero{grid-template-columns:1fr}
   .plant{border-right:0;border-bottom:1px solid var(--line)}
@@ -650,8 +659,17 @@ function tcolor(t){if(t==null)return"var(--pipe-idle)";if(t<=TSTOPS[0][0])return
 const VH={};
 function trackValves(){for(const c of circuits()){if(c.valve==null)continue;const h=VH[c.k]||(VH[c.k]={v:c.valve,dir:0,at:0});if(c.valve!==h.v){h.dir=c.valve>h.v?1:-1;h.at=Date.now();h.v=c.valve}}}
 function valveDir(k){const h=VH[k];return h&&Date.now()-h.at<90000?h.dir:0}
-const XSTOPS=[[40,[120,132,148]],[80,[226,160,72]],[130,[234,104,40]],[200,[186,28,28]]];
-function exColor(t){if(t==null)return"var(--pipe-idle)";if(t<=XSTOPS[0][0])return`rgb(${XSTOPS[0][1]})`;for(let i=1;i<XSTOPS.length;i++){const[a,ca]=XSTOPS[i-1],[b,cb]=XSTOPS[i];if(t<=b){const f=(t-a)/(b-a);return`rgb(${ca.map((v,j)=>Math.round(v+(cb[j]-v)*f)).join(",")})`}}return`rgb(${XSTOPS[XSTOPS.length-1][1]})`}
+// rich temperature scales (°C → colour) for hot water and flue gas
+const DHW_STOPS=[[12,"#1e3fa8"],[20,"#2b62d9"],[27,"#2e8fd6"],[33,"#20a8b8"],[38,"#2fb27a"],[42,"#86bf35"],[46,"#d9be22"],[50,"#f0a024"],[54,"#ee7d22"],[58,"#e65a21"],[63,"#d93a22"],[68,"#bb2026"],[75,"#8f1846"]];
+const FLUE_STOPS=[[30,"#64748b"],[45,"#7d8ba3"],[60,"#a99c62"],[75,"#d4a733"],[90,"#eb9a22"],[105,"#ef7b1f"],[125,"#e8571d"],[150,"#d6371f"],[180,"#b31f27"],[215,"#8c1636"],[250,"#5e1240"]];
+function scaleColor(stops,t){if(t==null)return null;const h=x=>[1,3,5].map(i=>parseInt(x.slice(i,i+2),16));if(t<=stops[0][0])return stops[0][1];
+  for(let i=1;i<stops.length;i++){const[a,ca]=stops[i-1],[b,cb]=stops[i];if(t<=b){const f=(t-a)/(b-a),A=h(ca),B=h(cb);return"#"+A.map((v,k)=>Math.round(v+(B[k]-v)*f).toString(16).padStart(2,"0")).join("")}}return stops[stops.length-1][1]}
+function textOn(hex){if(!hex||hex[0]!=="#")return"#fff";const[r,g,b]=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(c=>c<=.03928?c/12.92:Math.pow((c+.055)/1.055,2.4));return .2126*r+.7152*g+.0722*b>.36?"#1b1b1b":"#fff"}
+const dhwColor=t=>scaleColor(DHW_STOPS,t)||"var(--pipe-idle)";
+const exColor=t=>scaleColor(FLUE_STOPS,t)||"var(--pipe-idle)";
+function scaleBar(stops,lo,hi,t,unit="°C"){const pos=v=>clamp((v-lo)/(hi-lo)*100,0,100);const grad=stops.filter(([v])=>v>=lo-10&&v<=hi+10).map(([v,c])=>`${c} ${pos(v).toFixed(1)}%`).join(",");
+  const ticks=[];const step=(hi-lo)>120?50:10;for(let v=Math.ceil(lo/step)*step;v<=hi;v+=step)ticks.push(v);
+  return`<div class="sbar"><div class="sbar-g" style="background:linear-gradient(90deg,${grad})">${t!=null?`<i style="left:${pos(t)}%"></i>`:""}</div><div class="sbar-t">${ticks.map(v=>`<span style="left:${pos(v)}%">${v}</span>`).join("")}</div></div>`}
 let SCH={W:700,x0:400};
 function schemaFit(){const box=$("#schema"),svg=box.querySelector("svg");if(!svg)return;const narrow=matchMedia("(max-width:700px)").matches;
   svg.style.minWidth="";void narrow;syncSchemaNav()}
@@ -715,7 +733,7 @@ function schemaSVG(){
     if(bufB!=null)g+=`<text class="smm" x="${bx+29}" y="${RET+24}" text-anchor="middle">dole ${fmt(bufB)} °C</text>`;
     g+=`<path class="pipe" stroke="${supC}" d="M${bx+29} ${SUP} V118"/><path class="pipe" stroke="${tcolor(bufB??rT)}" d="M${bx+29} 246 V${RET}"/>`}
   // branches
-  const pill=(cx,y,t,col,unit="°C",dec=1)=>{const txt=fmt(t,dec);const w=txt.length*13+34;return`<rect x="${cx-w/2}" y="${y-27}" width="${w}" height="34" rx="17" fill="${col}"/><text x="${cx}" y="${y-2}" text-anchor="middle" style="font-family:var(--f-display);font-stretch:72%;font-weight:650;font-size:26px;fill:#fff">${txt}<tspan style="font-size:12px;fill:rgba(255,255,255,.85)" dx="2">${unit}</tspan></text>`};
+  const pill=(cx,y,t,col,unit="°C",dec=1)=>{const txt=fmt(t,dec);const w=txt.length*13+34;return`<rect x="${cx-w/2}" y="${y-27}" width="${w}" height="34" rx="17" fill="${col}"/><text x="${cx}" y="${y-2}" text-anchor="middle" style="font-family:var(--f-display);font-stretch:72%;font-weight:650;font-size:26px;fill:${textOn(col)}">${txt}<tspan style="font-size:12px;fill:${textOn(col)};opacity:.8" dx="2">${unit}</tspan></text>`};
   const IDLE="var(--pipe-idle)";
   const radiator=(rx,rt,fc,bc)=>{const fins=6,fw=7,gap=3,tw=fins*fw+(fins-1)*gap,sx=rx-tw/2,fh=216-rt;let o=`<rect x="${sx-4}" y="${rt+6}" width="${tw+8}" height="6" rx="3" fill="${fc}"/><rect x="${sx-4}" y="204" width="${tw+8}" height="6" rx="3" fill="${bc}"/>`;
     for(let f=0;f<fins;f++)o+=`<rect x="${sx+f*(fw+gap)}" y="${rt}" width="${fw}" height="${fh}" rx="3.5" fill="${fc}" opacity=".9"/>`;return o};
@@ -751,14 +769,14 @@ function schemaSVG(){
     }else{
       g+=`<path class="pipe" stroke="${b.pump?supC:IDLE}" d="M${cx} ${SUP} V138"/><path class="pipe" stroke="${b.pump?retC:IDLE}" d="M${cx} 214 V${RET}"/>`;
       if(b.pump)g+=`<path class="flow" d="M${cx} ${SUP} V138"/><path class="flow" d="M${cx} 214 V${RET}"/>`;
-      if(b.type==="dhw"){const tc=tcolor(b.t);
-        g+=`<defs><linearGradient id="gT${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${tc}"/><stop offset=".55" stop-color="${tc}"/><stop offset="1" stop-color="${tcolor(b.t-18)}"/></linearGradient></defs><rect x="${cx-26}" y="134" width="52" height="84" rx="20" fill="url(#gT${i})" stroke="var(--line)" stroke-width="1.5"/><path d="M${cx-12} 196 q6 -8 12 0 t12 0" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="2"/>`;
+      if(b.type==="dhw"){const tc=dhwColor(b.t);
+        g+=`<defs><linearGradient id="gT${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${tc}"/><stop offset=".55" stop-color="${tc}"/><stop offset="1" stop-color="${dhwColor(b.t-16)}"/></linearGradient></defs><rect x="${cx-26}" y="134" width="52" height="84" rx="20" fill="url(#gT${i})" stroke="var(--line)" stroke-width="1.5"/><path d="M${cx-12} 196 q6 -8 12 0 t12 0" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="2"/>`;
         if(b.hasCirc){g+=`<g ${DTL_ATTR("dhwc","Cirkulácia TÚV")}><rect x="${cx+28}" y="140" width="30" height="96" fill="transparent"/><path class="pipe thin" stroke="${b.circ?tc:IDLE}" d="M${cx+26} 148 H${cx+48} V204 H${cx+26}"/>${b.circ?`<path class="flow" d="M${cx+26} 148 H${cx+48} V204 H${cx+26}"/>`:""}${pumpG(cx+48,176,b.circ,"cirkulácie",7)}<text class="smm" x="${cx+48}" y="228" text-anchor="middle">${esc(b.circLbl)}</text></g>`}
       }else g+=radiator(cx,140,b.pump?fc:IDLE,b.pump?retC:IDLE);
       g+=pumpG(cx,116,b.pump,b.name);
     }
     g+=`<text class="lbl" x="${lx}" y="18" text-anchor="middle">${esc(b.name)}${b.roomLbl?" · izba":""}</text>`;
-    if(b.type==="dhw"&&b.t!=null)g+=pill(lx,58,b.t,tcolor(b.t));
+    if(b.type==="dhw"&&b.t!=null)g+=pill(lx,58,b.t,dhwColor(b.t));
     else g+=b.word!=null?`<text class="big" x="${lx}" y="54" text-anchor="middle" style="font-size:22px">${esc(b.word)}</text>`:`<text class="big" x="${lx}" y="56" text-anchor="middle">${fmt(b.t)}<tspan class="unit" dx="2">°C</tspan></text>`;
     g+=`<text class="sm" x="${lx}" y="76" text-anchor="middle">${esc(b.sub)}</text>`;
     if(b.custom)g+=`<text class="smm" x="${lx}" y="${RET+24}" text-anchor="middle">${esc(b.custom.slice(0,18))}</text>`;
@@ -770,7 +788,7 @@ function schemaSVG(){
   if(!pcp){
     const T0=30;
     g+=`<g ${DTL_ATTR("exhaust","Spaliny")}><rect x="${BX+BW-34}" y="0" width="26" height="${T0}" fill="transparent"/><rect x="${BX+BW-30}" y="4" width="18" height="${T0-2}" rx="2" fill="${exColor(exT)}" stroke="${STEEL}" stroke-width="2"/>`;
-    if(exT!=null){const ec=exColor(exT);const pw2=CP?70:114;g+=`<rect x="${BX+BW-38-pw2}" y="2" width="${pw2}" height="22" rx="11" fill="${ec}"/><text x="${BX+BW-38-pw2/2}" y="17.5" text-anchor="middle" style="font:600 ${CP?13:12}px var(--f-mono);fill:#fff">${CP?"":"spaliny "}${fmt(exT,0)} °C</text>`}
+    if(exT!=null){const ec=exColor(exT);const pw2=CP?70:114;g+=`<rect x="${BX+BW-38-pw2}" y="2" width="${pw2}" height="22" rx="11" fill="${ec}"/><text x="${BX+BW-38-pw2/2}" y="17.5" text-anchor="middle" style="font:600 ${CP?13:12}px var(--f-mono);fill:${textOn(ec)}">${CP?"":"spaliny "}${fmt(exT,0)} °C</text>`}
     if(running)g+=`<path class="smoke" d="M${BX+BW-21} 2 q-6 -6 0 -10" fill="none" stroke="var(--ink-3)" stroke-width="1.6"/>`;
     g+=`</g><g ${DTL_ATTR("boiler","Kotol")}>`;
     g+=`<rect x="${BX}" y="${T0}" width="${BW}" height="34" rx="6" fill="${STEEL}"/><rect x="${BX+BW/2-17}" y="${T0+7}" width="34" height="20" rx="3" fill="#cfe3f5"/><rect x="${BX+BW/2-14}" y="${T0+10}" width="12" height="6" fill="#f08a24"/><rect x="${BX+BW/2+1}" y="${T0+10}" width="11" height="6" fill="#3b82f6"/>`;
@@ -868,10 +886,10 @@ function dayRange(key){const rows=S.today;if(!rows)return null;let lo=null,hi=nu
 function renderTiles(){
   if(!S.data){$("#tiles").innerHTML="";return}
   const st=parseStatus(S.data.DevStatus)||{};const running=st.mode==="MOD"||st.mode==="PRA";const pcp=isPCP();const T=[];
-  let TID="";const tile=(lbl,val,unit,sub,spark,chip,dec=1,vcol="")=>`<div class="card tile" ${DTL_ATTR(TID,lbl.replace(/<[^>]+>/g,""))}><div class="lbl"><span class="eyebrow">${lbl}</span>${chip||""}</div><div class="val"${vcol?` style="color:${vcol}"`:""}>${fmt(val,dec)}<small>${unit}</small></div><div class="sub">${sub||""}</div><div class="spark">${spark||""}</div></div>`;
+  let TID="";const tile=(lbl,val,unit,sub,spark,chip,dec=1,vcol="")=>`<div class="card tile" ${DTL_ATTR(TID,lbl.replace(/<[^>]+>/g,""))}><div class="lbl"><span class="eyebrow">${lbl}</span>${chip||""}</div><div class="val">${vcol?`<span class="vpill" style="background:${vcol};color:${textOn(vcol)}">${fmt(val,dec)}<small>${unit}</small></span>`:`${fmt(val,dec)}<small>${unit}</small>`}</div><div class="sub">${sub||""}</div><div class="spark">${spark||""}</div></div>`;
   const bT=temp("BoilerTempAct"),sT=temp("BoilerTempCmd");
   if(bT!=null){TID="boiler";const d=sT!=null?bT-sT:null;T.push(tile(pcp?"Tepelné čerpadlo":"Kotol",bT,"°C",`cieľ ${fmtT(sT,0)}${d!=null?` · ${d>=0?"+":""}${fmt(d)} K`:""}${temp("CH1ReturnTempAct")!=null?` · spiatočka ${fmt(temp("CH1ReturnTempAct"))}`:""}`,sparkSVG("tkociol","--s2"),running?`<span class="chip hot">ohrieva</span>`:`<span class="chip">${esc((MODES[st.mode]||{}).l||"")}</span>`))}
-  const w=temp("DHWTempAct");if(w!=null){TID="dhw";const c=temp("DHWTempCmd"),hs=temp("DHWHist");T.push(tile("Teplá voda (TÚV)",w,"°C",`cieľ ${fmtT(c,0)}${hs!=null&&c!=null?` · dohrev pod ${fmt(c-hs,0)} °C`:""}`,sparkSVG("tcwu","--s1"),st.cwu?`<span class="chip hot">nabíja</span>`:"",1,tcolor(w)))}
+  const w=temp("DHWTempAct");if(w!=null){TID="dhw";const c=temp("DHWTempCmd"),hs=temp("DHWHist");T.push(tile("Teplá voda (TÚV)",w,"°C",`cieľ ${fmtT(c,0)}${hs!=null&&c!=null?` · dohrev pod ${fmt(c-hs,0)} °C`:""}`,sparkSVG("tcwu","--s1"),st.cwu?`<span class="chip hot">nabíja</span>`:"",1,dhwColor(w)))}
   const o=temp("WeaTempAct");if(o!=null){TID="wea";const r=dayRange("tpog");T.push(tile("Vonku",o,"°C",r?`dnes min ${fmt(r[0])} (${hhmm(r[2])}) · max ${fmt(r[1])} °C (${hhmm(r[3])})`:"",sparkSVG("tpog","--s1")))}
   circuits().forEach(c=>{TID="ch"+c.k;if(c.room==null){if(c.mix!=null)T.push(tile(esc(chName(c.k))+" · za miešačom",c.mix,"°C",c.valve!=null?`ventil otvorený na ${Math.round(c.valve)} %`:"",sparkSVG("tco"+(c.k+1),"--s3"),c.pump?`<span class="chip hot">kúri</span>`:""));return}const key=c.k===0?"tpok":"tpok"+(c.k+1);const tgt=c.com!=null?`komfort ${fmt(c.com)} · úspora ${fmt(c.eco)}`:(c.mix!=null?`miešač ${fmtT(c.mix)}`:"");
     T.push(tile("Izba · "+esc(chName(c.k)),c.room,"°C",tgt,sparkSVG(key,"--s2"),c.pump?`<span class="chip hot">kúri</span>`:""))});
@@ -1202,7 +1220,7 @@ function detailDef(id){
   if(id==="dhw"){const t=temp("DHWTempAct"),c=temp("DHWTempCmd"),h=temp("DHWHist"),ov=temp("DHWOverH");const pr=raw("DHWPriority");
     return{title:"Teplá úžitková voda",hero:[["Teplota",fmtT(t)],["Cieľ",fmtT(c,0)],["Čerpadlo",st.cwu?"beží":"stojí"]],
       text:(c!=null&&h!=null?`<p>Nabíjanie bojlera sa spustí pod <b>${fmt(c-h,0)} °C</b> a skončí pri <b>${fmt(c,0)} °C</b>.</p>`:"")+(ov?`<p>Počas nabíjania si kotol zvýši teplotu o <b>${fmt(ov,0)} °C</b>, aby bojler stihol nahriať.</p>`:"")+
-        (pr!=null?`<p>Prednosť TÚV je <b>${pr==="On"?"zapnutá":"vypnutá"}</b>: ${pr==="On"?"počas nabíjania bojlera sa vykurovanie preruší.":"bojler a vykurovanie bežia súčasne."}</p>`:"")+statLine("tcwu")+onTime(3),
+        (pr!=null?`<p>Prednosť TÚV je <b>${pr==="On"?"zapnutá":"vypnutá"}</b>: ${pr==="On"?"počas nabíjania bojlera sa vykurovanie preruší.":"bojler a vykurovanie bežia súčasne."}</p>`:"")+scaleBar(DHW_STOPS,15,75,t)+statLine("tcwu")+onTime(3),
       chart:{series:[{k:"tcwu",l:"TÚV",c:"--s1"}],ref:[c!=null&&{v:c,l:"cieľ"},c!=null&&h!=null&&{v:c-h,l:"dohrev"}].filter(Boolean)},act:[3],groups:["dhw"]}}
   if(id==="dhwc"){const md=String(raw("DHWCMode")??"");return{title:"Cirkulácia TÚV",hero:[["Režim",L.active[md]||md||"—"],["Čerpadlo",st.circ?"beží":"stojí"],["Zapína od",fmtT(temp("DHWCTempON"),0)]],
       text:`<p>Cirkulačné čerpadlo preháňa teplú vodu potrubím, aby z kohútika tiekla teplá hneď. Spína sa len keď má bojler aspoň ${fmtT(temp("DHWCTempON"),0)}.</p>`+onTime(4),act:[4],groups:["dhwc"]}}
@@ -1240,7 +1258,7 @@ function detailDef(id){
       text:`<p>Špirály sú na konci podávača. Pri štarte sa rozžeravia, ventilátor cez ne fúka vzduch a ten horúci vzduch zapáli štiepku na ústí horáka. Keď spaliny začnú rásť, regulátor špirály vypne a horák prejde do prevádzky.</p>`+
         (times.length?`<p class="dstat">Dnes zapaľoval o ${times.map(hhmm).join(", ")}</p>`:""),groups:[]}}
   if(id==="exhaust"){const e=temp("B017"),mx=temp("ExhaustTempMax");return{title:"Spaliny",hero:[["Teraz",fmtT(e,0)],["Dnes max",se.tspaliny?fmtT(se.tspaliny.max,0):"—"],["Limit",fmtT(mx,0)]],
-      text:`<p>Teplota spalín ukazuje, či a ako intenzívne horí. Regulátor podľa nej rozpozná zapálenie aj vyhasnutie.</p>`+statLine("tspaliny"),chart:{series:[{k:"tspaliny",l:"Spaliny",c:"--s8"}]},groups:[]}}
+      text:`<p>Teplota spalín ukazuje, či a ako intenzívne horí. Regulátor podľa nej rozpozná zapálenie aj vyhasnutie.</p>`+scaleBar(FLUE_STOPS,30,250,e)+statLine("tspaliny"),chart:{series:[{k:"tspaliny",l:"Spaliny",c:"--s8"}]},groups:[]}}
   if(id==="ret"){const r=temp("CH1ReturnTempAct"),mn=temp("CH1ReturnTempCmd"),on=raw("CH1ReturnProtAct")==="On";
     return{title:"Spiatočka",hero:[["Teplota",fmtT(r)],["Minimum",fmtT(mn,0)],["Ochrana",on?"zasahuje":"nezasahuje"]],
       text:`<p>Studená voda vracajúca sa do kotla spôsobuje kondenzáciu a dechtovanie. Keď spiatočka klesne pod ${fmtT(mn,0)}, regulátor priškrtí miešač, aby sa kotol rýchlejšie zohrial.</p>`,groups:[]}}
